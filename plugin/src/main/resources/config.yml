@@ -1,0 +1,21 @@
+# ------------------------------------------------------------------------------------
+# PlayerCharacters Configuration
+# ------------------------------------------------------------------------------------
+
+# The type of database to use.
+# Options: "SQLITE" (recommended for small/medium servers) or "MYSQL" (recommended for large servers/networks).
+database:
+  type: "SQLITE"
+
+  # Settings for MySQL. These are ignored if the type is set to SQLITE.
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "playercharacters"
+    username: "root"
+    password: "your_password"
+    # Use SSL for a secure connection to the database
+    useSSL: false
+
+# Wardrobe system configuration will go here later.
+wardrobe: {}

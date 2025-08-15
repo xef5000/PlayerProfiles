@@ -1,0 +1,22 @@
+name: PlayerProfiles
+version: '${project.version}'
+main: ca.xef5000.playerprofiles.PlayerProfiles
+api-version: '1.20'
+author: xef5000
+
+commands:
+  character:
+    description: "Main command for the PlayerCharacters plugin."
+    usage: "/<command> [subcommand]"
+    aliases: [char, pc] # Optional short aliases
+
+permissions:
+  playercharacters.command.base:
+    description: "Allows access to the base /character command."
+    default: true
+  playercharacters.command.switch:
+    description: "Allows switching between character profiles."
+    default: true
+  playercharacters.command.create:
+    description: "Allows creating new character profiles."
+    default: true
