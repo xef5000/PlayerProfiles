@@ -5,3 +5,6 @@ rootProject.name = "PlayerProfiles"
 // in sub-folders with these names.
 include("api")
 include("plugin")
+include("nms")
+
+include("nms:v1_20_R1")

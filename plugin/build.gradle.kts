@@ -20,6 +20,9 @@ dependencies {
     //    It allows you to use your own interfaces like CharacterProfile and CharacterManager.
     implementation(project(":api"))
 
+    // NMS
+    implementation(project(":nms:v1_20_R1"))
+
 
     // --- Compile-Only Dependencies (provided by server or other plugins) ---
 
