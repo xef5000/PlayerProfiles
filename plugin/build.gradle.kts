@@ -3,7 +3,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     `java-library`
     // We apply the shadow plugin here, which is used to bundle dependencies into the final JAR
-    id("com.github.johnrengelman.shadow")
+    id("com.gradleup.shadow")
 }
 
 // This block tells Gradle to replace placeholders like ${version} in your plugin.yml
@@ -22,6 +22,9 @@ dependencies {
 
     // NMS
     implementation(project(":nms:v1_20_R1"))
+    implementation(project(":nms:v1_20_R2"))
+    implementation(project(":nms:v1_20_R3"))
+    implementation(project(":nms:v1_20_R4"))
 
 
     // --- Compile-Only Dependencies (provided by server or other plugins) ---

@@ -77,6 +77,17 @@ public final class PlayerProfiles extends JavaPlugin {
                 case "v1_20_R1":
                     implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R1.IdentityService_v1_20_R1";
                     break;
+                case "v1_20_R2": // For Minecraft 1.20.2
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R2.IdentityService_v1_20_R2";
+                    break;
+
+                case "v1_20_R3": // For Minecraft 1.20.3 and 1.20.4
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R3.IdentityService_v1_20_R3";
+                    break;
+
+                case "v1_20_R4": // For Minecraft 1.20.5 and 1.20.6
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R4.IdentityService_v1_20_R4";
+                    break;
                 default:
                     getLogger().warning("Unsupported server version: " + serverVersion);
                     return null;
