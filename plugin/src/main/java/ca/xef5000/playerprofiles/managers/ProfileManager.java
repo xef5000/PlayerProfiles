@@ -4,25 +4,24 @@ import ca.xef5000.playerprofiles.PlayerProfiles;
 import ca.xef5000.playerprofiles.api.data.IdentityData;
 import ca.xef5000.playerprofiles.api.data.Profile;
 import ca.xef5000.playerprofiles.api.services.NMSService;
+import ca.xef5000.playerprofiles.api.utils.ProfileUsernameGenerator;
 import ca.xef5000.playerprofiles.data.ProfileImpl;
 import ca.xef5000.playerprofiles.util.ProfileLimitUtil;
-import ca.xef5000.playerprofiles.util.ProfileUsernameGenerator;
+import net.kyori.adventure.text.Component;
 import net.luckperms.api.LuckPerms;
-import net.luckperms.api.model.data.DataType;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.model.user.UserManager;
-import net.luckperms.api.node.types.MetaNode;
-import net.luckperms.api.platform.PlayerAdapter;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.potion.PotionEffect;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -134,84 +133,77 @@ public class ProfileManager {
      * @return A CompletableFuture that completes when the switch is done.
      */
     public CompletableFuture<Boolean> switchProfile(Player player, UUID newProfileId) {
+        // This async setup is perfect.
         IdentityData originalIdentity = plugin.getIdentityManager().getOriginalIdentity(player);
-        if (originalIdentity == null) {
-            player.sendMessage(ChatColor.RED + "Could not retrieve your original identity. Aborting switch.");
-            return CompletableFuture.completedFuture(false);
-        }
-        // First, load the profile data from your database
         return plugin.getDatabaseManager().loadProfile(newProfileId)
                 .thenCompose(profileOpt -> {
-                    if (profileOpt.isEmpty()) {
-                        // Profile doesn't exist, fail early.
-                        return CompletableFuture.completedFuture(false);
-                    }
+                    if (profileOpt.isEmpty()) return CompletableFuture.completedFuture(false);
                     Profile newProfile = profileOpt.get();
+                    UserManager userManager = plugin.getLuckPermsApi().getUserManager();
+                    String newUsername = newProfile.getProfileName().replace(" ", "_"); // Or your unique generator
 
-                    LuckPerms luckPerms = plugin.getLuckPermsApi();
-                    UserManager userManager = luckPerms.getUserManager();
-
-                    String newUsername = newProfile.getProfileName().replace(" ", "_");
-
-                    // Step 1: Create/load the user object. This prepares their data.
                     return userManager.loadUser(newProfile.getProfileId(), newUsername)
-                            .thenCompose(newUser -> {
-                                // STEP 2: THIS IS THE MISSING LINK.
-                                // Explicitly tell LuckPerms to save and cache the username mapping.
-                                return userManager.savePlayerData(newProfile.getProfileId(), newUsername)
-                                        .thenApply(result -> newUser); // Pass the user object along the chain
-                            })
+                            .thenCompose(newUser -> userManager.savePlayerData(newProfile.getProfileId(), newUsername)
+                                    .thenApply(result -> newUser)
+                            )
                             .thenApply(newUser -> {
-                                // Step 3: Now that all async work is done, switch on the main thread.
                                 Bukkit.getScheduler().runTask(plugin, () -> {
                                     performSwitch(player, originalIdentity, newProfile, newUser, newUsername);
                                 });
                                 return true;
                             });
-                })
-                .exceptionally(throwable -> {
-                    plugin.getLogger().severe("Failed during profile switch process for " + newProfileId + ": " + throwable.getMessage());
-                    throwable.printStackTrace();
-                    return false;
                 });
     }
+
 
     /**
      * This helper method contains the logic that MUST run on the main server thread.
      */
     private void performSwitch(Player player, IdentityData originalIdentity, Profile newProfile, User newLuckPermsUser, String newUsername) {
         try {
-            // Cleanup, save, and apply identity are all correct.
-            User oldUser = plugin.getLuckPermsApi().getUserManager().getUser(player.getUniqueId());
-            if (oldUser != null) plugin.getLuckPermsApi().getUserManager().cleanupUser(oldUser);
+            NMSService nmsHandler = plugin.getNmsHandler();
 
+            // 1. Save state of the old profile.
             Profile oldProfile = getActiveProfile(player);
             if (oldProfile != null) {
                 savePlayerStateToProfile(player, oldProfile);
                 plugin.getDatabaseManager().saveProfile(oldProfile);
             }
 
+            // 2. Preserve volatile state before the respawn.
+            Collection<PotionEffect> effects = player.getActivePotionEffects();
+
+            // 3. Apply the new identity.
             IdentityData newIdentity = new IdentityData(
                     newProfile.getProfileId(),
                     newUsername,
                     originalIdentity.skin()
             );
-            plugin.getIdentityManager().applyIdentity(player, newIdentity);
+            nmsHandler.applyIdentity(player, newIdentity);
 
-            applyProfileToPlayer(newProfile, player);
+            // 4. Inject the new LuckPerms permissible.
+            if (plugin.getLuckPermsInjector() != null) {
+                plugin.getLuckPermsInjector().inject(player, newLuckPermsUser);
+            }
 
+            // 5. Update your internal state.
             UUID originalUUID = originalIdentity.uuid();
             activeProfiles.put(originalUUID, newProfile);
             plugin.getDatabaseManager().setPlayerActiveProfile(originalUUID, newProfile.getProfileId());
 
-            // Schedule the definitive injection for the next tick.
+            // 6. Trigger the server-side respawn to force a full refresh.
+            // This must happen AFTER all other state changes.
+            nmsHandler.relogPlayer(player);
+
+            // 7. Re-apply data on the next tick, after the respawn is complete.
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (player.isOnline() && plugin.getLuckPermsInjector() != null) {
-                    plugin.getLuckPermsInjector().inject(player, newLuckPermsUser);
+                if (player.isOnline()) {
+                    applyProfileToPlayer(newProfile, player);
+                    player.addPotionEffects(effects);
                 }
             }, 1L);
 
-            plugin.getLogger().info("Successfully switched identity for " + originalIdentity.name() + ". Permissible injection scheduled.");
+            plugin.getLogger().info("Successfully switched identity for " + originalIdentity.name() + ". Server-side respawn complete.");
 
         } catch (Exception e) {
             plugin.getLogger().severe("Error during performSwitch: " + e.getMessage());

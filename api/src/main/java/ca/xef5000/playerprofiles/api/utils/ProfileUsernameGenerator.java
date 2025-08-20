@@ -1,8 +1,5 @@
-package ca.xef5000.playerprofiles.util;
+package ca.xef5000.playerprofiles.api.utils;
 
-import ca.xef5000.playerprofiles.api.data.Profile;
-
-import java.util.Locale;
 import java.util.UUID;
 
 public final class ProfileUsernameGenerator {

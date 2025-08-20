@@ -40,4 +40,11 @@ public interface NMSService {
      */
     void injectPermissible(Player player, Object permissible) throws Exception;
 
+    /**
+     * Performs a server-side "relog" of the player to force a full
+     * re-initialization across all plugins.
+     * @param player The player to relog.
+     */
+    void relogPlayer(Player player);
+
 }

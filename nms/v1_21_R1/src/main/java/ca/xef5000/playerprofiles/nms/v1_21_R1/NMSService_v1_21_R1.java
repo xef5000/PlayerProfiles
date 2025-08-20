@@ -2,22 +2,36 @@ package ca.xef5000.playerprofiles.nms.v1_21_R1;
 
 import ca.xef5000.playerprofiles.api.data.IdentityData;
 import ca.xef5000.playerprofiles.api.services.NMSService;
+import ca.xef5000.playerprofiles.api.utils.ProfileUsernameGenerator;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import net.kyori.adventure.text.Component;
+import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.game.ClientboundAddEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket;
+import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.GameType;
 import org.bukkit.Bukkit;
 import org.bukkit.craftbukkit.entity.CraftHumanEntity;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.net.InetAddress;
 import java.util.*;
 
 public class NMSService_v1_21_R1 implements NMSService {
@@ -604,11 +618,30 @@ public class NMSService_v1_21_R1 implements NMSService {
         permField.set(player, permissible);
     }
 
+    @Override
+    public void relogPlayer(Player player) {
+        try {
+            ServerPlayer serverPlayer = ((CraftPlayer) player).getHandle();
+            PlayerList playerList = serverPlayer.getServer().getPlayerList();
+
+            // The respawn method is the server's own, safe way to re-create a player entity.
+            // It takes the player to respawn and a boolean for 'keepAllPlayerData' which relates to death.
+            // We set it to true to indicate this is not a death-respawn.
+            playerList.respawn(serverPlayer, true, Entity.RemovalReason.DISCARDED, PlayerRespawnEvent.RespawnReason.PLUGIN); // false for "afterDeath"
+
+            plugin.getLogger().info("Successfully performed a server-side respawn for " + player.getName());
+
+        } catch (Exception e) {
+            plugin.getLogger().severe("CRITICAL FAILURE during player respawn!");
+            e.printStackTrace();
+        }
+    }
+
     /**
      * A private helper method to perform the translation from API DTO to NMS object.
      */
     private GameProfile createGameProfileFromData(IdentityData data, Player player) {
-        GameProfile profile = new GameProfile(data.uuid(), data.name().replace(" ", "_"));
+        GameProfile profile = new GameProfile(data.uuid(), ProfileUsernameGenerator.generate(data.uuid()));
         IdentityData.SkinData skin = data.skin();
         if (skin != null && skin.value() != null && !skin.value().isEmpty() && skin.signature() != null && !skin.signature().isEmpty()) {
             profile.getProperties().put("textures", new Property("textures", skin.value(), skin.signature()));
