@@ -16,6 +16,3 @@ database:
     password: "your_password"
     # Use SSL for a secure connection to the database
     useSSL: false
-
-# Wardrobe system configuration will go here later.
-wardrobe: {}
