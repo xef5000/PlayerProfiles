@@ -23,6 +23,6 @@ public class IdentityListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        identityManager.handlePlayerLogout(event.getPlayer());
+        //identityManager.handlePlayerLogout(event.getPlayer());
     }
 }

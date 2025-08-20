@@ -9,7 +9,7 @@ import java.util.Optional;
 /**
  * A high-level service for managing and applying custom identities to players.
  */
-public interface IdentityService {
+public interface NMSService {
 
     /**
      * Gets the original, true identity of a player as it was when they logged in.
@@ -19,24 +19,17 @@ public interface IdentityService {
     IdentityData getOriginalIdentity(Player player);
 
     /**
-     * Gets the currently applied identity for a player.
-     * @param player The player.
-     * @return An Optional containing the currently applied identity.
-     */
-    Optional<IdentityData> getAppliedIdentity(Player player);
-
-    /**
      * Changes a player's identity to match the provided IdentityData.
      * @param player The player to change.
      * @param newIdentity The new identity to apply.
      */
     void applyIdentity(Player player, IdentityData newIdentity);
 
-    /**
-     * Resets a player's identity back to their original one.
-     * @param player The player to reset.
-     */
-    void resetIdentity(Player player);
+    void cleanupPlayerOnLogout(Player player);
 
+    /**
+     * Temporarily changes player info for the duration of a callback.
+     */
+    void setPlayerInfoTemporarily(Player player, IdentityData tempIdentity, Runnable callback);
 
 }

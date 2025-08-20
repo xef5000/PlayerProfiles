@@ -1,15 +1,12 @@
 package ca.xef5000.playerprofiles;
 
-import ca.xef5000.playerprofiles.api.services.IdentityService;
+import ca.xef5000.playerprofiles.api.services.NMSService;
 import ca.xef5000.playerprofiles.commands.CharacterCommand;
 import ca.xef5000.playerprofiles.listeners.IdentityListener;
 import ca.xef5000.playerprofiles.listeners.ProfileListener;
-import ca.xef5000.playerprofiles.managers.ConfigManager;
-import ca.xef5000.playerprofiles.managers.DatabaseManager;
-import ca.xef5000.playerprofiles.managers.IdentityManager;
-import ca.xef5000.playerprofiles.managers.ProfileManager;
+import ca.xef5000.playerprofiles.managers.*;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
@@ -20,6 +17,7 @@ public final class PlayerProfiles extends JavaPlugin {
     private DatabaseManager databaseManager;
     private ProfileManager profileManager;
     private IdentityManager identityManager;
+    private PluginCompatibilityManager pluginCompatibilityManager;
 
     @Override
     public void onEnable() {
@@ -39,19 +37,13 @@ public final class PlayerProfiles extends JavaPlugin {
 
         this.profileManager = new ProfileManager(this);
 
-        IdentityService nmsHandler = setupNmsHandler();
+        NMSService nmsHandler = setupNmsHandler();
         if (nmsHandler == null) {
             getLogger().severe("Could not load NMS handler. Advanced identity features will be disabled.");
         }
 
-        this.identityManager = new IdentityManager(nmsHandler);
-
-        getServer().getServicesManager().register(
-                IdentityService.class, // The API Interface
-                this.identityManager,   // Your Core Implementation
-                this,                  // This plugin
-                ServicePriority.Normal
-        );
+        this.identityManager = new IdentityManager(nmsHandler, this);
+        this.pluginCompatibilityManager = new PluginCompatibilityManager(this, nmsHandler);
 
         CharacterCommand characterCommand = new CharacterCommand(this);
         getCommand("character").setExecutor(characterCommand);
@@ -67,38 +59,67 @@ public final class PlayerProfiles extends JavaPlugin {
         }
     }
 
-    private IdentityService setupNmsHandler() {
+    private NMSService setupNmsHandler() {
         try {
-            String serverVersion = getServer().getClass().getPackage().getName().split("\\.")[3];
-            getLogger().info("Detected server version: ".concat(serverVersion));
+            // The new, reliable method: Get the Bukkit version string.
+            String bukkitVersion = Bukkit.getBukkitVersion();
+            getLogger().info("Detected Bukkit version: " + bukkitVersion);
+
+            String nmsRevision;
+
+            if (bukkitVersion.startsWith("1.21.6") || bukkitVersion.startsWith("1.21.7") || bukkitVersion.startsWith("1.21.8")) {
+                nmsRevision = "v1_21_R2";
+            } else if (bukkitVersion.startsWith("1.21")) { // 1.21, 1.21.1, 1.21.2, 1.21.3, 1.21.4, 1.21.5
+                nmsRevision = "v1_21_R1";
+            } else if (bukkitVersion.startsWith("1.20.5") || bukkitVersion.startsWith("1.20.6")) {
+                nmsRevision = "v1_20_R4";
+            } else if (bukkitVersion.startsWith("1.20.3") || bukkitVersion.startsWith("1.20.4")) {
+                nmsRevision = "v1_20_R3";
+            } else if (bukkitVersion.startsWith("1.20.2")) {
+                nmsRevision = "v1_20_R2";
+            } else if (bukkitVersion.startsWith("1.20") || bukkitVersion.startsWith("1.20.1")) {
+                nmsRevision = "v1_20_R1";
+            } else {
+                // If none of the above match, we don't have a supported version.
+                getLogger().severe("====================================================");
+                getLogger().severe("Unsupported server version: " + bukkitVersion);
+                getLogger().severe("PlayerProfiles' advanced identity features will be disabled.");
+                getLogger().severe("====================================================");
+                return null;
+            }
+
+            getLogger().info("Determined NMS revision: " + nmsRevision);
 
             String implementationClassName;
-            switch (serverVersion) {
+            // The switch statement is still perfect for this part.
+            switch (nmsRevision) {
+                case "v1_21_R1":
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_21_R1.NMSService_v1_21_R1";
+                    break;
+                case "v1_20_R4":
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R4.NMSService_v1_20_R4";
+                    break;
+                case "v1_20_R3":
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R3.NMSService_v1_20_R3";
+                    break;
+                case "v1_20_R2":
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R2.NMSService_v1_20_R2";
+                    break;
                 case "v1_20_R1":
-                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R1.IdentityService_v1_20_R1";
-                    break;
-                case "v1_20_R2": // For Minecraft 1.20.2
-                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R2.IdentityService_v1_20_R2";
-                    break;
-
-                case "v1_20_R3": // For Minecraft 1.20.3 and 1.20.4
-                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R3.IdentityService_v1_20_R3";
-                    break;
-
-                case "v1_20_R4": // For Minecraft 1.20.5 and 1.20.6
-                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R4.IdentityService_v1_20_R4";
+                    implementationClassName = "ca.xef5000.playerprofiles.nms.v1_20_R1.NMSService_v1_20_R1";
                     break;
                 default:
-                    getLogger().warning("Unsupported server version: " + serverVersion);
+                    // This case should theoretically never be reached due to the check above, but it's good practice.
                     return null;
             }
 
             Class<?> clazz = Class.forName(implementationClassName);
-            // Pass the plugin instance 'this' to the NMS constructor
-            return (IdentityService) clazz.getConstructor(Plugin.class).newInstance(this);
+            NMSService handler = (NMSService) clazz.getConstructor(Plugin.class).newInstance(this);
+            getLogger().info("Successfully loaded NMS implementation for " + nmsRevision);
+            return handler;
 
         } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "Could not initialize NMS handler.", e);
+            getLogger().log(Level.SEVERE, "Could not initialize NMS handler. This can happen with a plugin conflict or an unexpected server version.", e);
             return null;
         }
     }
@@ -118,5 +139,9 @@ public final class PlayerProfiles extends JavaPlugin {
 
     public IdentityManager getIdentityManager() {
         return identityManager;
+    }
+
+    public PluginCompatibilityManager getPluginCompatibilityManager() {
+        return pluginCompatibilityManager;
     }
 }
