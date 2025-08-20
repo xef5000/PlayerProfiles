@@ -1,0 +1,58 @@
+# ------------------------------------------------------------------------------------
+# PlayerProfiles Language Configuration
+# ------------------------------------------------------------------------------------
+
+# GUI Messages
+gui:
+  profile_selection:
+    title: "&6&lProfile Selection"
+    no_profiles_title: "&c&lNo Profiles Found"
+    no_profiles_lore:
+      - "&7You don't have any profiles yet."
+      - "&7Click the button below to create one!"
+    create_profile_name: "&a&lCreate New Profile"
+    create_profile_lore:
+      - "&7Click to create a new profile."
+      - "&7Your current state will be saved."
+    profile_item_name: "&e&l{profile_name}"
+    profile_item_lore:
+      - "&7Created: &f{creation_date}"
+      - "&7Last Used: &f{last_used_date}"
+      - ""
+      - "&aClick to select this profile!"
+    profile_limit_reached_name: "&c&lProfile Limit Reached"
+    profile_limit_reached_lore:
+      - "&7You have reached your maximum"
+      - "&7number of profiles: &c{limit}"
+      - ""
+      - "&7Contact an administrator to"
+      - "&7increase your profile limit."
+    creating_profile_name: "&6&lCreating Profile..."
+    creating_profile_lore:
+      - "&7Please wait while your"
+      - "&7profile is being created."
+
+# Chat Messages
+messages:
+  profile_created: "&aSuccessfully created profile: &e{profile_name}"
+  profile_selected: "&aSelected profile: &e{profile_name}"
+  profile_creation_failed: "&cFailed to create profile. Please try again."
+  profile_selection_failed: "&cFailed to select profile. Please try again."
+  must_select_profile: "&cYou must select a profile before continuing!"
+  profile_limit_reached: "&cYou have reached your maximum number of profiles ({limit})."
+  no_permission_create: "&cYou don't have permission to create profiles."
+  
+# Error Messages
+errors:
+  gui_error: "&cAn error occurred while opening the GUI."
+  database_error: "&cA database error occurred. Please contact an administrator."
+  unknown_error: "&cAn unknown error occurred. Please try again."
+
+# General
+general:
+  loading: "&7Loading..."
+  please_wait: "&7Please wait..."
+  back: "&7« Back"
+  close: "&7Close"
+  confirm: "&aConfirm"
+  cancel: "&cCancel"

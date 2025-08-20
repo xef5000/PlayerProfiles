@@ -11,12 +11,27 @@ commands:
     aliases: [char, pc] # Optional short aliases
 
 permissions:
-  playercharacters.command.base:
+  playerprofiles.command.base:
     description: "Allows access to the base /character command."
     default: true
-  playercharacters.command.switch:
+  playerprofiles.command.switch:
     description: "Allows switching between character profiles."
     default: true
-  playercharacters.command.create:
+  playerprofiles.command.create:
     description: "Allows creating new character profiles."
     default: true
+  playerprofiles.profile_limit.1:
+    description: "Allows 1 profile maximum."
+    default: false
+  playerprofiles.profile_limit.3:
+    description: "Allows 3 profiles maximum (default)."
+    default: true
+  playerprofiles.profile_limit.5:
+    description: "Allows 5 profiles maximum."
+    default: false
+  playerprofiles.profile_limit.10:
+    description: "Allows 10 profiles maximum."
+    default: false
+  playerprofiles.profile_limit.unlimited:
+    description: "Allows unlimited profiles (use a very high number like 999)."
+    default: false

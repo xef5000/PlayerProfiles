@@ -1,6 +1,7 @@
 package ca.xef5000.playerprofiles.commands;
 
 import ca.xef5000.playerprofiles.PlayerProfiles;
+import ca.xef5000.playerprofiles.gui.ProfileSelectionGui;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -32,7 +33,7 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
 
         Player player = (Player) sender;
 
-        if (!player.hasPermission("playercharacters.command.base")) {
+        if (!player.hasPermission("playerprofiles.command.base")) {
             player.sendMessage(ChatColor.RED + "You do not have permission to use this command.");
             return true;
         }
@@ -50,6 +51,9 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
             case "create":
                 handleCreateCommand(player, args);
                 break;
+            case "gui":
+                handleGuiCommand(player);
+                break;
             default:
                 player.sendMessage(ChatColor.RED + "Unknown subcommand. Showing help:");
                 sendHelpMessage(player, label);
@@ -60,7 +64,7 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleSwitchCommand(Player player, String[] args) {
-        if (!player.hasPermission("playercharacters.command.switch")) {
+        if (!player.hasPermission("playerprofiles.command.switch")) {
             player.sendMessage(ChatColor.RED + "You do not have permission to switch profiles.");
             return;
         }
@@ -68,7 +72,7 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
         if (args.length < 2) {
             player.sendMessage(ChatColor.RED + "Usage: /character switch <profileName>");
             // Suggest available profiles to the user
-            plugin.getDatabaseManager().getProfilesForPlayer(player.getUniqueId()).thenAccept(profiles -> {
+            plugin.getDatabaseManager().getProfilesForPlayer(player).thenAccept(profiles -> {
                 if (!profiles.isEmpty()) {
                     String available = profiles.stream().map(p -> p.getProfileName()).collect(Collectors.joining(", "));
                     player.sendMessage(ChatColor.YELLOW + "Available profiles: " + available);
@@ -81,7 +85,7 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.GRAY + "Searching for profile '" + profileName + "'...");
 
         // Asynchronously find and switch the profile to avoid lagging the server
-        plugin.getDatabaseManager().getProfilesForPlayer(player.getUniqueId()).thenAccept(profiles -> {
+        plugin.getDatabaseManager().getProfilesForPlayer(player).thenAccept(profiles -> {
             UUID targetProfileId = profiles.stream()
                     .filter(p -> p.getProfileName().equalsIgnoreCase(profileName))
                     .map(p -> p.getProfileId())
@@ -105,7 +109,7 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleCreateCommand(Player player, String[] args) {
-        if (!player.hasPermission("playercharacters.command.create")) {
+        if (!player.hasPermission("playerprofiles.command.create")) {
             player.sendMessage(ChatColor.RED + "You do not have permission to create profiles.");
             return;
         }
@@ -131,7 +135,7 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(ChatColor.GRAY + "Checking if profile name is available...");
 
         // Asynchronously check if the name is already taken before creating
-        plugin.getDatabaseManager().getProfilesForPlayer(player.getUniqueId()).thenAccept(profiles -> {
+        plugin.getDatabaseManager().getProfilesForPlayer(player).thenAccept(profiles -> {
             boolean nameExists = profiles.stream()
                     .anyMatch(p -> p.getProfileName().equalsIgnoreCase(profileName));
 
@@ -161,10 +165,20 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
         });
     }
 
+    private void handleGuiCommand(Player player) {
+        if (!player.hasPermission("playerprofiles.command.base")) {
+            player.sendMessage(ChatColor.RED + "You do not have permission to use this command.");
+            return;
+        }
+
+        new ProfileSelectionGui(plugin, player).open();
+    }
+
     private void sendHelpMessage(Player player, String label) {
-        player.sendMessage(ChatColor.GOLD + "--- PlayerCharacters Help ---");
+        player.sendMessage(ChatColor.GOLD + "--- PlayerProfiles Help ---");
         player.sendMessage(ChatColor.YELLOW + "/" + label + " switch <name>" + ChatColor.GRAY + " - Switch to a different profile.");
         player.sendMessage(ChatColor.YELLOW + "/" + label + " create <name>" + ChatColor.GRAY + " - Creates a new, empty profile.");
+        player.sendMessage(ChatColor.YELLOW + "/" + label + " gui" + ChatColor.GRAY + " - Opens the profile selection GUI.");
         // Add more help messages for future subcommands here
     }
 
@@ -178,11 +192,14 @@ public class CharacterCommand implements CommandExecutor, TabCompleter {
         List<String> completions = new ArrayList<>();
 
         if (args.length == 1) {
-            if (player.hasPermission("playercharacters.command.switch")) {
+            if (player.hasPermission("playerprofiles.command.switch")) {
                 completions.add("switch");
             }
-            if (player.hasPermission("playercharacters.command.create")) {
+            if (player.hasPermission("playerprofiles.command.create")) {
                 completions.add("create");
+            }
+            if (player.hasPermission("playerprofiles.command.base")) {
+                completions.add("gui");
             }
             return completions.stream()
                     .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))

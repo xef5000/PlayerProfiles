@@ -158,11 +158,12 @@ public class DatabaseManager {
         return CompletableFuture.supplyAsync(() -> {
             UUID profileId = UUID.randomUUID();
             Timestamp now = new Timestamp(System.currentTimeMillis());
+            UUID ownerUuid = plugin.getIdentityManager().getOriginalIdentity(owner).uuid();
 
             // The original blocking code is now safely inside the async task
             try (PreparedStatement ps = connection.prepareStatement(CREATE_PROFILE)) {
                 ps.setString(1, profileId.toString());
-                ps.setString(2, owner.getUniqueId().toString());
+                ps.setString(2, ownerUuid.toString());
                 ps.setString(3, profileName);
                 ps.setTimestamp(4, now);
                 ps.executeUpdate();
@@ -413,6 +414,10 @@ public class DatabaseManager {
         }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable)); // Use Bukkit's async scheduler
     }
 
+    public CompletableFuture<Collection<Profile>> getProfilesForPlayer(Player player) {
+        return getProfilesForPlayer(plugin.getIdentityManager().getOriginalIdentity(player).uuid());
+    }
+
 
     /**
      * Deletes a character profile and all associated data from the database.
@@ -446,6 +451,10 @@ public class DatabaseManager {
             }
             return Optional.empty();
         }, runnable -> Bukkit.getScheduler().runTaskAsynchronously(plugin, runnable));
+    }
+
+    public CompletableFuture<Optional<UUID>> getPlayerActiveProfileId(Player player) {
+        return getPlayerActiveProfileId(plugin.getIdentityManager().getOriginalIdentity(player).uuid());
     }
 
     /**

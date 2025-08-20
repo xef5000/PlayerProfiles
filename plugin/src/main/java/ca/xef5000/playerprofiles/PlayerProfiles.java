@@ -2,6 +2,7 @@ package ca.xef5000.playerprofiles;
 
 import ca.xef5000.playerprofiles.api.services.NMSService;
 import ca.xef5000.playerprofiles.commands.CharacterCommand;
+import ca.xef5000.playerprofiles.gui.GuiManager;
 import ca.xef5000.playerprofiles.listeners.IdentityListener;
 import ca.xef5000.playerprofiles.listeners.ProfileListener;
 import ca.xef5000.playerprofiles.managers.*;
@@ -18,11 +19,13 @@ public final class PlayerProfiles extends JavaPlugin {
     private ProfileManager profileManager;
     private IdentityManager identityManager;
     private PluginCompatibilityManager pluginCompatibilityManager;
+    private GuiManager guiManager;
 
     @Override
     public void onEnable() {
         // Plugin startup logic
         ConfigManager.load(this);
+        LangManager.load(this);
 
         databaseManager = new DatabaseManager(this);
         try {
@@ -36,6 +39,7 @@ public final class PlayerProfiles extends JavaPlugin {
         }
 
         this.profileManager = new ProfileManager(this);
+        this.guiManager = new GuiManager(this);
 
         NMSService nmsHandler = setupNmsHandler();
         if (nmsHandler == null) {
@@ -54,6 +58,10 @@ public final class PlayerProfiles extends JavaPlugin {
     @Override
     public void onDisable() {
         // Plugin shutdown logic
+        if (guiManager != null) {
+            guiManager.closeAllGuis();
+        }
+
         if (databaseManager != null) {
             databaseManager.disconnect();
         }
@@ -127,8 +135,10 @@ public final class PlayerProfiles extends JavaPlugin {
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(new ProfileListener(this), this);
         getServer().getPluginManager().registerEvents(new IdentityListener(this.identityManager), this);
+        getServer().getPluginManager().registerEvents(guiManager, this);
     }
 
+    // Getter methods for managers
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
     }
@@ -143,5 +153,9 @@ public final class PlayerProfiles extends JavaPlugin {
 
     public PluginCompatibilityManager getPluginCompatibilityManager() {
         return pluginCompatibilityManager;
+    }
+
+    public GuiManager getGuiManager() {
+        return guiManager;
     }
 }

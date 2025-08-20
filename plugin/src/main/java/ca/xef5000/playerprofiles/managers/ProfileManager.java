@@ -4,11 +4,13 @@ import ca.xef5000.playerprofiles.PlayerProfiles;
 import ca.xef5000.playerprofiles.api.data.IdentityData;
 import ca.xef5000.playerprofiles.api.data.Profile;
 import ca.xef5000.playerprofiles.data.ProfileImpl;
+import ca.xef5000.playerprofiles.util.ProfileLimitUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -38,7 +40,7 @@ public class ProfileManager {
      * @param player The player joining.
      */
     public void onPlayerJoin(Player player) {
-        plugin.getDatabaseManager().getPlayerActiveProfileId(player.getUniqueId())
+        plugin.getDatabaseManager().getPlayerActiveProfileId(player)
                 .thenAcceptAsync(profileIdOpt -> {
                     profileIdOpt.ifPresent(profileId -> {
                         plugin.getDatabaseManager().loadProfile(profileId).thenAccept(profileOpt -> {
@@ -245,5 +247,63 @@ public class ProfileManager {
             plugin.getLogger().severe("Error saving player state to profile for " + player.getName() + ": " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Gets the maximum number of profiles a player can have based on their permissions.
+     * @param player The player to check
+     * @return The maximum number of profiles the player can have
+     */
+    public int getProfileLimit(Player player) {
+        return ProfileLimitUtil.getProfileLimit(player);
+    }
+
+    /**
+     * Checks if a player can create another profile based on their current profile count and limit.
+     * @param player The player to check
+     * @return A CompletableFuture that completes with true if the player can create another profile
+     */
+    public CompletableFuture<Boolean> canCreateProfile(Player player) {
+        return plugin.getDatabaseManager().getProfilesForPlayer(player)
+                .thenApply(profiles -> ProfileLimitUtil.canCreateProfile(player, profiles.size()));
+    }
+
+    /**
+     * Generates the next available profile name for a player.
+     * Names follow the pattern "Profile 1", "Profile 2", etc.
+     * @param player The player to generate a name for
+     * @return A CompletableFuture that completes with the next available profile name
+     */
+    public CompletableFuture<String> generateProfileName(Player player) {
+        return plugin.getDatabaseManager().getProfilesForPlayer(player)
+                .thenApply(profiles -> {
+                    int nextNumber = 1;
+                    boolean nameExists;
+
+                    do {
+                        String candidateName = "Profile " + nextNumber;
+                        nameExists = profiles.stream()
+                                .anyMatch(p -> p.getProfileName().equalsIgnoreCase(candidateName));
+
+                        if (!nameExists) {
+                            return candidateName;
+                        }
+
+                        nextNumber++;
+                    } while (nextNumber <= 100); // Safety limit to prevent infinite loops
+
+                    // Fallback if we somehow can't find a name
+                    return "Profile " + System.currentTimeMillis();
+                });
+    }
+
+    /**
+     * Creates a new profile with an automatically generated name.
+     * @param player The player to create the profile for
+     * @return A CompletableFuture that completes with the new profile, or null if creation failed
+     */
+    public CompletableFuture<Profile> createProfileWithGeneratedName(Player player) {
+        return generateProfileName(player)
+                .thenCompose(profileName -> plugin.getDatabaseManager().createProfile(player, profileName));
     }
 }
