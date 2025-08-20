@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.Entity;
 import org.bukkit.Bukkit;
+import org.bukkit.craftbukkit.entity.CraftHumanEntity;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -593,11 +594,21 @@ public class NMSService_v1_21_R1 implements NMSService {
         }
     }
 
+    @Override
+    public void injectPermissible(Player player, Object permissible) throws Exception {
+        // Find the 'perm' field in the CraftHumanEntity class, which holds the permissible.
+        Field permField = CraftHumanEntity.class.getDeclaredField("perm");
+        permField.setAccessible(true);
+
+        // Inject the new permissible object.
+        permField.set(player, permissible);
+    }
+
     /**
      * A private helper method to perform the translation from API DTO to NMS object.
      */
     private GameProfile createGameProfileFromData(IdentityData data, Player player) {
-        GameProfile profile = new GameProfile(data.uuid(), player.getName());
+        GameProfile profile = new GameProfile(data.uuid(), data.name().replace(" ", "_"));
         IdentityData.SkinData skin = data.skin();
         if (skin != null && skin.value() != null && !skin.value().isEmpty() && skin.signature() != null && !skin.signature().isEmpty()) {
             profile.getProperties().put("textures", new Property("textures", skin.value(), skin.signature()));

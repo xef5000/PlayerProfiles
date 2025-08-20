@@ -120,6 +120,33 @@ public class IdentityManager {
         }
     }
 
+    public void revertToOriginalIdentity(Player player) {
+        try {
+            UUID currentUUID = player.getUniqueId();
+            UUID originalUUID = findOriginalUUID(currentUUID); // Using your existing private helper
+
+            if (originalUUID != null) {
+                PlayerIdentity identity = identityCache.get(originalUUID);
+                if (identity != null && !currentUUID.equals(originalUUID)) {
+                    // Get the original GameProfile data
+                    IdentityData originalIdentityData = identity.getOriginalIdentity();
+
+                    // Apply it via NMS
+                    nmsHandler.applyIdentity(player, originalIdentityData);
+
+                    // Update the live mapping
+                    currentToOriginalUUID.remove(currentUUID);
+                    currentToOriginalUUID.put(originalUUID, originalUUID);
+
+                    plugin.getLogger().info("Reverted " + player.getName() + " to original identity before logout.");
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().severe("Could not revert player " + player.getName() + " to original identity!");
+            e.printStackTrace();
+        }
+    }
+
     /**
      * Find the original UUID by searching through the identity cache
      */

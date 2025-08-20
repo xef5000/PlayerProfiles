@@ -3,6 +3,7 @@ version: '${project.version}'
 main: ca.xef5000.playerprofiles.PlayerProfiles
 api-version: '1.20'
 author: xef5000
+depend: [LuckPerms]
 
 commands:
   character:

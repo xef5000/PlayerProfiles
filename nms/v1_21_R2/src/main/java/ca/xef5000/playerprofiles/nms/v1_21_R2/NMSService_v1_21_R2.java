@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.world.entity.Entity;
 import org.bukkit.Bukkit;
+import org.bukkit.craftbukkit.entity.CraftHumanEntity;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -591,6 +592,16 @@ public class NMSService_v1_21_R2 implements NMSService {
         } catch (Exception e) {
             // Ignore errors in silent update
         }
+    }
+
+    @Override
+    public void injectPermissible(Player player, Object permissible) throws Exception {
+        // Find the 'perm' field in the CraftHumanEntity class, which holds the permissible.
+        Field permField = CraftHumanEntity.class.getDeclaredField("perm");
+        permField.setAccessible(true);
+
+        // Inject the new permissible object.
+        permField.set(player, permissible);
     }
 
     /**

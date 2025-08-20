@@ -3,13 +3,23 @@ package ca.xef5000.playerprofiles.managers;
 import ca.xef5000.playerprofiles.PlayerProfiles;
 import ca.xef5000.playerprofiles.api.data.IdentityData;
 import ca.xef5000.playerprofiles.api.data.Profile;
+import ca.xef5000.playerprofiles.api.services.NMSService;
 import ca.xef5000.playerprofiles.data.ProfileImpl;
 import ca.xef5000.playerprofiles.util.ProfileLimitUtil;
+import ca.xef5000.playerprofiles.util.ProfileUsernameGenerator;
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.model.data.DataType;
+import net.luckperms.api.model.user.User;
+import net.luckperms.api.model.user.UserManager;
+import net.luckperms.api.node.types.MetaNode;
+import net.luckperms.api.platform.PlayerAdapter;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
@@ -124,72 +134,126 @@ public class ProfileManager {
      * @return A CompletableFuture that completes when the switch is done.
      */
     public CompletableFuture<Boolean> switchProfile(Player player, UUID newProfileId) {
+        IdentityData originalIdentity = plugin.getIdentityManager().getOriginalIdentity(player);
+        if (originalIdentity == null) {
+            player.sendMessage(ChatColor.RED + "Could not retrieve your original identity. Aborting switch.");
+            return CompletableFuture.completedFuture(false);
+        }
+        // First, load the profile data from your database
         return plugin.getDatabaseManager().loadProfile(newProfileId)
-                .thenApply(profileOpt -> {
+                .thenCompose(profileOpt -> {
                     if (profileOpt.isEmpty()) {
-                        return false; // Profile doesn't exist
+                        // Profile doesn't exist, fail early.
+                        return CompletableFuture.completedFuture(false);
                     }
                     Profile newProfile = profileOpt.get();
 
-                    // Switch to MAIN thread to perform the actual switch
-                    Bukkit.getScheduler().runTask(plugin, () -> {
-                        try {
-                            IdentityData originalIdentity = plugin.getIdentityManager().getOriginalIdentity(player);
-                            if (originalIdentity == null) {
-                                player.sendMessage(ChatColor.RED + "Could not retrieve your original identity. Aborting switch.");
-                                return;
-                            }
+                    LuckPerms luckPerms = plugin.getLuckPermsApi();
+                    UserManager userManager = luckPerms.getUserManager();
 
-                            // 3. Save the state of the CURRENT profile before we change anything.
-                            Profile oldProfile = getActiveProfile(player);
-                            if (oldProfile != null) {
-                                savePlayerStateToProfile(player, oldProfile);
+                    String newUsername = newProfile.getProfileName().replace(" ", "_");
 
-                                // Save async with error handling
-                                plugin.getDatabaseManager().saveProfile(oldProfile)
-                                        .exceptionally(throwable -> {
-                                            plugin.getLogger().severe("Failed to save old profile during switch: " + throwable.getMessage());
-                                            return null;
-                                        });
-                            }
-
-                            // 4. Construct the NEW identity using the profile's UUID.
-                            // We use the profile's UUID and name, but the player's ORIGINAL skin.
-                            IdentityData newIdentity = new IdentityData(
-                                    newProfile.getProfileId(),      // The profile's ID is the NEW UUID
-                                    newProfile.getProfileName(),    // The profile's name is the NEW name
-                                    originalIdentity.skin()         // Keep the player's original skin
-                            );
-
-                            // 5. Apply the new IDENTITY. This is the dangerous NMS operation.
-                            plugin.getIdentityManager().applyIdentity(player, newIdentity);
-
-                            // 6. Apply the new PROFILE DATA (inventory, location, etc.)
-                            applyProfileToPlayer(newProfile, player);
-
-                            // Use the original UUID as the key (this is important!)
-                            UUID originalUUID = originalIdentity.uuid();
-                            activeProfiles.put(originalUUID, newProfile);
-
-                            // 7. Handle plugin compatibility - THIS IS THE NEW PART
-                            plugin.getPluginCompatibilityManager().handleProfileSwitch(player, originalIdentity, newIdentity);
-
-                            // 8. Update the database to remember this is the new active profile.
-                            plugin.getDatabaseManager().setPlayerActiveProfile(originalUUID, newProfileId);
-
-                        } catch (Exception e) {
-                            plugin.getLogger().severe("Error during profile switch for " + player.getName() + ": " + e.getMessage());
-                            e.printStackTrace();
-                            player.sendMessage(ChatColor.RED + "An error occurred while switching profiles. Please try again.");
-                        }
-                    });
-
-                    return true;
+                    // Step 1: Create/load the user object. This prepares their data.
+                    return userManager.loadUser(newProfile.getProfileId(), newUsername)
+                            .thenCompose(newUser -> {
+                                // STEP 2: THIS IS THE MISSING LINK.
+                                // Explicitly tell LuckPerms to save and cache the username mapping.
+                                return userManager.savePlayerData(newProfile.getProfileId(), newUsername)
+                                        .thenApply(result -> newUser); // Pass the user object along the chain
+                            })
+                            .thenApply(newUser -> {
+                                // Step 3: Now that all async work is done, switch on the main thread.
+                                Bukkit.getScheduler().runTask(plugin, () -> {
+                                    performSwitch(player, originalIdentity, newProfile, newUser, newUsername);
+                                });
+                                return true;
+                            });
                 })
                 .exceptionally(throwable -> {
-                    plugin.getLogger().severe("Failed to load profile " + newProfileId + ": " + throwable.getMessage());
+                    plugin.getLogger().severe("Failed during profile switch process for " + newProfileId + ": " + throwable.getMessage());
+                    throwable.printStackTrace();
                     return false;
                 });
+    }
+
+    /**
+     * This helper method contains the logic that MUST run on the main server thread.
+     */
+    private void performSwitch(Player player, IdentityData originalIdentity, Profile newProfile, User newLuckPermsUser, String newUsername) {
+        try {
+            // Cleanup, save, and apply identity are all correct.
+            User oldUser = plugin.getLuckPermsApi().getUserManager().getUser(player.getUniqueId());
+            if (oldUser != null) plugin.getLuckPermsApi().getUserManager().cleanupUser(oldUser);
+
+            Profile oldProfile = getActiveProfile(player);
+            if (oldProfile != null) {
+                savePlayerStateToProfile(player, oldProfile);
+                plugin.getDatabaseManager().saveProfile(oldProfile);
+            }
+
+            IdentityData newIdentity = new IdentityData(
+                    newProfile.getProfileId(),
+                    newUsername,
+                    originalIdentity.skin()
+            );
+            plugin.getIdentityManager().applyIdentity(player, newIdentity);
+
+            applyProfileToPlayer(newProfile, player);
+
+            UUID originalUUID = originalIdentity.uuid();
+            activeProfiles.put(originalUUID, newProfile);
+            plugin.getDatabaseManager().setPlayerActiveProfile(originalUUID, newProfile.getProfileId());
+
+            // Schedule the definitive injection for the next tick.
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (player.isOnline() && plugin.getLuckPermsInjector() != null) {
+                    plugin.getLuckPermsInjector().inject(player, newLuckPermsUser);
+                }
+            }, 1L);
+
+            plugin.getLogger().info("Successfully switched identity for " + originalIdentity.name() + ". Permissible injection scheduled.");
+
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error during performSwitch: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Handles the reflection and NMS calls to inject a new LuckPerms permissible.
+     */
+    private void injectAndRefreshPermissible(Player player, User newUser) {
+        try {
+            plugin.getLogger().info("Starting permissible injection for " + player.getName());
+
+            // 1. Get the internal LPBukkitPlugin instance via casting.
+            // This requires the LuckPerms Bukkit JAR on the compile classpath.
+            Object lpPlugin = plugin.getLuckPermsApi();
+
+            // 2. Find the internal LuckPermsPermissible class via reflection.
+            Class<?> permissibleClass = Class.forName("me.lucko.luckperms.bukkit.inject.permissible.LuckPermsPermissible");
+
+            // 3. Find its constructor: LuckPermsPermissible(Player, User, LPBukkitPlugin)
+            Constructor<?> constructor = permissibleClass.getConstructor(Player.class, User.class, lpPlugin.getClass().getInterfaces()[0]);
+
+            // 4. Create a new instance of the permissible, linked to our new user.
+            Object newPermissible = constructor.newInstance(player, newUser, lpPlugin);
+
+            // 5. Use our NMS service to inject the new permissible into the player.
+            NMSService nmsHandler = plugin.getNmsHandler();
+            nmsHandler.injectPermissible(player, newPermissible);
+
+            // 6. Find and call the 'setupAttachments' method on the new permissible to activate it.
+            Method setupMethod = permissibleClass.getDeclaredMethod("setupAttachments");
+            setupMethod.setAccessible(true);
+            setupMethod.invoke(newPermissible);
+
+            plugin.getLogger().info("Successfully injected and initialized new permissible for user " + newUser.getUsername());
+
+        } catch (Exception e) {
+            plugin.getLogger().severe("CRITICAL FAILURE during permissible injection!");
+            e.printStackTrace();
+        }
     }
 
     /**

@@ -1,9 +1,12 @@
 package ca.xef5000.playerprofiles.listeners;
 
 import ca.xef5000.playerprofiles.PlayerProfiles;
+import ca.xef5000.playerprofiles.api.data.Profile;
 import ca.xef5000.playerprofiles.gui.ProfileSelectionGui;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -74,8 +77,28 @@ public class ProfileListener implements Listener {
         }, 10L); // 0.5 second delay
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGH)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        plugin.getProfileManager().onPlayerQuit(event.getPlayer());
+        Player player = event.getPlayer();
+
+        // The getActiveProfile method now needs to resolve based on original UUID.
+        // Let's assume ProfileManager can handle this.
+        Profile activeProfile = plugin.getProfileManager().getActiveProfile(player);
+
+        if (activeProfile != null) {
+            // 1. Save the final state of the player to their active profile.
+            plugin.getProfileManager().savePlayerStateToProfile(player, activeProfile);
+            plugin.getDatabaseManager().saveProfile(activeProfile);
+            plugin.getLogger().info("Saved final state for profile " + activeProfile.getProfileName());
+        }
+
+        // 2. THIS IS THE MOST IMPORTANT STEP OF THE ENTIRE PLUGIN.
+        // Revert the player's GameProfile back to their original Mojang identity
+        // BEFORE the server and other plugins process the logout.
+        plugin.getIdentityManager().revertToOriginalIdentity(player);
+
+        // 3. Now, let the ProfileManager do its normal cache cleanup.
+        // This will now operate on the reverted, original player identity.
+        plugin.getProfileManager().onPlayerQuit(player);
     }
 }

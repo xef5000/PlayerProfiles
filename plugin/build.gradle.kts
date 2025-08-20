@@ -37,6 +37,8 @@ dependencies {
     // For the LuckPerms context calculator, you need the LuckPerms API.
     // The LuckPerms plugin will provide this on the server.
     compileOnly("net.luckperms:api:5.4")
+    implementation("me.lucko.luckperms:luckperms:4.2")
+
 
     implementation("com.google.code.gson:gson:2.10.1")
 

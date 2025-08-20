@@ -32,4 +32,12 @@ public interface NMSService {
      */
     void setPlayerInfoTemporarily(Player player, IdentityData tempIdentity, Runnable callback);
 
+    /**
+     * Surgically injects a new Permissible object into the player.
+     * @param player The player to modify.
+     * @param permissible The new Permissible object to inject.
+     * @throws Exception if reflection fails.
+     */
+    void injectPermissible(Player player, Object permissible) throws Exception;
+
 }

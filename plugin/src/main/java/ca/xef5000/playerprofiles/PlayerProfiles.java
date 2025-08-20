@@ -6,8 +6,12 @@ import ca.xef5000.playerprofiles.gui.GuiManager;
 import ca.xef5000.playerprofiles.listeners.IdentityListener;
 import ca.xef5000.playerprofiles.listeners.ProfileListener;
 import ca.xef5000.playerprofiles.managers.*;
+import ca.xef5000.playerprofiles.permissions.LuckPermsInjector;
+import ca.xef5000.playerprofiles.permissions.ProfileContextCalculator;
+import net.luckperms.api.LuckPerms;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
@@ -20,12 +24,29 @@ public final class PlayerProfiles extends JavaPlugin {
     private IdentityManager identityManager;
     private PluginCompatibilityManager pluginCompatibilityManager;
     private GuiManager guiManager;
+    private LuckPerms luckPermsApi;
+    private NMSService nmsHandler;
+    private LuckPermsInjector luckPermsInjector;
 
     @Override
     public void onEnable() {
         // Plugin startup logic
         ConfigManager.load(this);
         LangManager.load(this);
+
+        RegisteredServiceProvider<LuckPerms> provider = Bukkit.getServicesManager().getRegistration(LuckPerms.class);
+        if (provider != null) {
+            this.luckPermsApi = provider.getProvider();
+            try {
+                this.luckPermsInjector = new LuckPermsInjector(this);
+            } catch (Exception e) {
+                getLogger().severe("Failed to initialize LuckPerms integration. Profile permissions will not work.");
+                // You might want to disable the plugin here if it's a hard dependency
+            }
+        } else {
+            getLogger().severe("LuckPerms not found!");
+            // ...
+        }
 
         databaseManager = new DatabaseManager(this);
         try {
@@ -41,7 +62,7 @@ public final class PlayerProfiles extends JavaPlugin {
         this.profileManager = new ProfileManager(this);
         this.guiManager = new GuiManager(this);
 
-        NMSService nmsHandler = setupNmsHandler();
+        nmsHandler = setupNmsHandler();
         if (nmsHandler == null) {
             getLogger().severe("Could not load NMS handler. Advanced identity features will be disabled.");
         }
@@ -138,6 +159,10 @@ public final class PlayerProfiles extends JavaPlugin {
         getServer().getPluginManager().registerEvents(guiManager, this);
     }
 
+    public void registerProfileContext(LuckPerms luckPermsApi) {
+        luckPermsApi.getContextManager().registerCalculator(new ProfileContextCalculator(this));
+    }
+
     // Getter methods for managers
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
@@ -157,5 +182,17 @@ public final class PlayerProfiles extends JavaPlugin {
 
     public GuiManager getGuiManager() {
         return guiManager;
+    }
+
+    public LuckPerms getLuckPermsApi() {
+        return luckPermsApi;
+    }
+
+    public NMSService getNmsHandler() {
+        return nmsHandler;
+    }
+
+    public LuckPermsInjector getLuckPermsInjector() {
+        return this.luckPermsInjector;
     }
 }
